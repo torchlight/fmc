@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+<head>
+<meta charset='UTF-8'>
+<title>Domino reduction scramble thingy</title>
+<style>
+#scramblebox
+{
+	width: 54em;
+	height: 24em;
+}
+#dr-filter label
+{
+	padding-right: 0.8em;
+}
+button, select
+{
+	font-size: 1em;
+}
+</style>
+</head>
+<body>
+<textarea readonly id='scramblebox'></textarea><br>
+<button onclick='document.querySelector("#scramblebox").value=""'>clear</button>
+<button onclick='fill()'>generate</button>
+<button onclick='fill(20)'>generate 20</button>
+<br>
+<label>Scramble padding: <select id='scramble-padding-select'>
+<option value='0'>None</option>
+<option value='1' selected>F . B</option>
+<option value='3'>R' U' F . R' U' F</option>
+</select></label>
+<div id='dr-filter'>
+<label>Filter preset: <select onchange='set_filter_preset(this.value)' id='filter-preset-select'></select></label>
+<br>
+<label><input type='checkbox' id='filter-ar'>AR/JZP</label>
+<br>
+<label><input type='checkbox' id='filter-0c0e'>0c0e</label><label><input type='checkbox' id='filter-2c0e'>2c0e</label><label><input type='checkbox' id='filter-3c0e'>3c0e</label><label><input type='checkbox' id='filter-4c0e'>4c0e</label><label><input type='checkbox' id='filter-5c0e'>5c0e</label><label><input type='checkbox' id='filter-6c0e'>6c0e</label><label><input type='checkbox' id='filter-7c0e'>7c0e</label><label><input type='checkbox' id='filter-8c0e'>8c0e</label>
+<br>
+<label><input type='checkbox' id='filter-0c2e'>0c2e</label><label><input type='checkbox' id='filter-2c2e'>2c2e</label><label><input type='checkbox' id='filter-3c2e'>3c2e</label><label><input type='checkbox' id='filter-4c2e'>4c2e</label><label><input type='checkbox' id='filter-5c2e'>5c2e</label><label><input type='checkbox' id='filter-6c2e'>6c2e</label><label><input type='checkbox' id='filter-7c2e'>7c2e</label><label><input type='checkbox' id='filter-8c2e'>8c2e</label>
+<br>
+<label><input type='checkbox' id='filter-0c4e'>0c4e</label><label><input type='checkbox' id='filter-2c4e'>2c4e</label><label><input type='checkbox' id='filter-3c4e'>3c4e</label><label><input type='checkbox' id='filter-4c4e'>4c4e</label><label><input type='checkbox' id='filter-5c4e'>5c4e</label><label><input type='checkbox' id='filter-6c4e'>6c4e</label><label><input type='checkbox' id='filter-7c4e'>7c4e</label><label><input type='checkbox' id='filter-8c4e'>8c4e</label>
+<br>
+<label><input type='checkbox' id='filter-0c6e'>0c6e</label><label><input type='checkbox' id='filter-2c6e'>2c6e</label><label><input type='checkbox' id='filter-3c6e'>3c6e</label><label><input type='checkbox' id='filter-4c6e'>4c6e</label><label><input type='checkbox' id='filter-5c6e'>5c6e</label><label><input type='checkbox' id='filter-6c6e'>6c6e</label><label><input type='checkbox' id='filter-7c6e'>7c6e</label><label><input type='checkbox' id='filter-8c6e'>8c6e</label>
+<br>
+<label><input type='checkbox' id='filter-0c8e'>0c8e</label><label><input type='checkbox' id='filter-2c8e'>2c8e</label><label><input type='checkbox' id='filter-3c8e'>3c8e</label><label><input type='checkbox' id='filter-4c8e'>4c8e</label><label><input type='checkbox' id='filter-5c8e'>5c8e</label><label><input type='checkbox' id='filter-6c8e'>6c8e</label><label><input type='checkbox' id='filter-7c8e'>7c8e</label><label><input type='checkbox' id='filter-8c8e'>8c8e</label>
+<br>
+</div>
+<script src='cube.js'></script>
+<script src='min2phase.js'></script>
+<script src='dr-trainer.js'></script>
+<script>
+
+
+
+const filter_preset_array = [
+{name: 'none', filters: []},
+{name: 'basic triggers', filters: ['4c4e', '3c2e', '4c2e']},
+{name: 'basic triggers, AR', filters: ['4c4e', '3c2e', '4c2e', 'ar']},
+{name: 'the good stuff', filters: ['0c0e', '0c2e', '2c0e', '3c2e', '0c4e', '2c2e', '3c0e', '4c2e', '4c4e', '4c0e', 'ar']},
+{name: 'custom'},
+];
+
+const filter_presets = {};
+
+for (let filter_preset of filter_preset_array)
+{
+	filter_presets[filter_preset.name] = filter_preset.filters;
+	let option_el = document.createElement('option');
+	option_el.value = filter_preset.name;
+	option_el.textContent = filter_preset.name;
+	document.querySelector('#filter-preset-select').add(option_el);
+}
+
+function set_filter_preset(name)
+{
+	let filters = filter_presets[name];
+	if (filters === undefined) {return;}
+	let filter_checkboxes = document.querySelectorAll('#dr-filter input[type="checkbox"]');
+	for (let el of filter_checkboxes)
+	{
+		el.checked = false;
+	}
+	for (let filter_str of filters)
+	{
+		document.querySelector('#filter-' + filter_str).checked = true;
+	}
+}
+
+
+set_filter_preset(document.querySelector('#filter-preset-select').value = 'basic triggers');
+
+{
+let set_to_custom_preset = () => {document.querySelector('#filter-preset-select').value = 'custom'};
+for (let checkbox of document.querySelectorAll('#dr-filter input[type="checkbox"]'))
+{
+	checkbox.addEventListener('change', set_to_custom_preset);
+}
+}
+
+function get_filters()
+{
+	let filter_checkboxes = document.querySelectorAll('#dr-filter input:checked');
+	return [...filter_checkboxes].map(el => el.id.substring(7));
+}
+
+function fill(n = 1)
+{
+	let padding = +document.querySelector('#scramble-padding-select').value;
+	let filters = get_filters();
+	let s = [];
+	for (let i = 0; i < n; i++)
+	{
+		s[i] = find_generating_sequence(generate_filtered_scramble(filters), padding);
+		if (n > 1) {s[i] = (i+1) + '. ' + s[i];}
+	}
+	//console.log(s);
+	document.querySelector('#scramblebox').value = s.join('\n');
+}
+</script>
+</body>
+</html>
