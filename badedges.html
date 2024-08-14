@@ -56,9 +56,12 @@ function parse_eospec(str)
 		for (let j = 0; j < 3; j++)
 		{
 			if (i === j) {continue;}
-			if (eospec[i][0] - eospec[j][1] > 8) {throw `invalid EO spec (difference between axes too big: ${eospec[i]} and ${eospec[j]}`;}
+			if (eospec[i][0] - eospec[j][1] > 8) {throw `invalid EO spec (difference between axes too big: ${eospec[i]} and ${eospec[j]})`;}
 		}
 	}
+	eospec.sort(([a, b], [c, d]) => 100*(a-c) + (b-d));
+	// exact sort order doesn't matter as long as [0,0] gets sorted to the front and [12,12] gets sorted to the end
+	console.log(JSON.stringify(eospec));
 	return eospec;
 }
 
@@ -76,30 +79,95 @@ function check_against_spec(x, y, z, spec)
 	);
 }
 
+function sum(arr)
+{
+	let n = arr.length;
+	let acc = 0;
+	for (let i = 0; i < n; i++)
+	{
+		acc += arr[i];
+	}
+	return acc;
+}
+
+function generate_00x_ep(ud_range)
+{
+	let ep_reduced;
+	while (true)
+	{
+		ep_reduced = random_permutation(8);
+		let ud = 0;
+		for (let i = 0; i < 8; i++)
+		{
+			ud += (ep_reduced[i] ^ i) & 1;
+		}
+		if (in_range(ud, ud_range))
+		{
+			if (ud === 0 && ud_range[1] !== 0)
+			{
+				// reroll with probability 2/3 to avoid overrepresenting 0/0/0
+				if (rng.next(3) === 0) {break;}
+				else {continue;}
+			}
+			else {break;}
+		}
+	}
+	let ep = [0,0,0,0, ...random_permutation(4).map(x => x+4), 0,0,0,0];
+	let expand = [0,1,2,3, 8,9,10,11];
+	for (let i = 0; i < 8; i++)
+	{
+		ep[expand[i]] = expand[ep_reduced[i]];
+	}
+	return ep;
+}
+
 function generate_eo_filtered_scramble(eospec)
 {
 	const MSLICE = [1,0,1,0, 0,0,0,0, 1,0,1,0];
 	const ESLICE = [0,0,0,0, 1,1,1,1, 0,0,0,0];
 	let ep, eo;
-	while (true)
+	if (eospec[0][0] === 0 && eospec[0][1] === 0 && eospec[1][0] === 0 && eospec[1][1] === 0)
 	{
-		ep = random_permutation(12);
+		// 0 / 0 / x
+		ep = generate_00x_ep(eospec[2]);
+		eo = Array(12).fill(0);
+	}
+	else if (eospec[2][0] === 12 && eospec[2][1] === 12 && eospec[1][0] === 12 && eospec[1][1] === 12)
+	{
+		// x / 12 / 12
+		ep = generate_00x_ep([12-eospec[0][1], 12-eospec[0][0]]);
+		eo = Array(12).fill(1);
+	}
+	else
+	{
+		eo = Array(12);
 		while (true)
 		{
-			eo = Array(11).fill().map(() => rng.next(2));
-			eo[11] = eo.reduce((x,y) => x^y);
-			let fb = eo.reduce((x,y) => x+y);
-			if (
-				(eospec[0][0] <= fb && fb <= eospec[0][1]) ||
-				(eospec[1][0] <= fb && fb <= eospec[1][1]) ||
-				(eospec[2][0] <= fb && fb <= eospec[2][1]))
+			ep = random_permutation(12);
+			let fb;
+			while (true)
 			{
-				break;
+				let eo_index = rng.next(2048);
+				eo[11] = 0;
+				fb = 0;
+				for (let i = 0; i < 11; i++)
+				{
+					eo[i] = (eo_index >> i) & 1;
+					eo[11] ^= eo[i];
+					fb += eo[i];
+				}
+				if (
+					(eospec[0][0] <= fb && fb <= eospec[0][1]) ||
+					(eospec[1][0] <= fb && fb <= eospec[1][1]) ||
+					(eospec[2][0] <= fb && fb <= eospec[2][1]))
+				{
+					break;
+				}
 			}
+			let eo_ud = eo.map((x, i) => (x ^ MSLICE[i] ^ MSLICE[ep[i]]));
+			let eo_rl = eo.map((x, i) => (x ^ ESLICE[i] ^ ESLICE[ep[i]]));
+			if (check_against_spec(fb, sum(eo_ud), sum(eo_rl), eospec)) {break;}
 		}
-		let eo_ud = eo.map((x, i) => (x ^ MSLICE[i] ^ MSLICE[ep[i]]));
-		let eo_rl = eo.map((x, i) => (x ^ ESLICE[i] ^ ESLICE[ep[i]]));
-		if (check_against_spec(eo.reduce((x,y) => x+y), eo_ud.reduce((x,y) => x+y), eo_rl.reduce((x,y) => x+y), eospec)) {break;}
 	}
 	let parity = permutation_parity(ep);
 	let cp = random_permutation(8);
@@ -116,6 +184,13 @@ function generate_eo_filtered_scramble(eospec)
 	{
 		cube.setCorner(i, cp[i] + 8*co[i]);
 	}
+	let rotate = rng.next(3);
+	for (let i = 0; i < rotate; i++)
+	{
+		cube.applyOuterBlockMove(2, 3, 1);
+		cube.applyOuterBlockMove(0, 3, 1);
+	}
+	if (rotate !== 0) {cube.recolour();}
 	//cube.print();
 	return cube;
 }
