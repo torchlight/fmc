@@ -6,7 +6,10 @@ let entropy = 0;
 let entropy_size = 1;
 // invariant: 1 <= entropy_size <= 2**53 and 0 <= entropy < entropy_size
 
-let random_bit = this.crypto ? () => crypto.getRandomValues(new Uint8Array(1))[0] & 1 : () => Math.round(Math.random());
+let u8 = new Uint8Array(1);
+
+let random_bit = this.crypto ? () => crypto.getRandomValues(u8)[0] & 1 : () => Math.round(Math.random());
+let random_byte = this.crypto ? () => crypto.getRandomValues(u8)[0] : () => Math.floor(Math.random() * 256);
 
 const SAFETY_MARGIN = 10000;
 const MAX_ITERATIONS = 20;
@@ -20,10 +23,15 @@ Note: SAFETY_MARGIN must be at most 2**20.
 
 function next(bound)
 {
-	if (bound <= 0 || bound > 2**32 || bound !== Math.floor(bound)) {throw 'invalid bound';}
+	if (bound <= 0 || bound > 0x100000000 || bound !== Math.floor(bound)) {throw 'invalid bound';}
 	for (let it = 0; it <= MAX_ITERATIONS; it++)
 	{
-		for (let i = 0; i < 53 && entropy_size <= 2**52 && entropy_size < bound*SAFETY_MARGIN; i++)
+		while (entropy_size <= 0x200000000000) // = 2**45
+		{
+			entropy = entropy * 256 + random_byte();
+			entropy_size *= 256;
+		}
+		while (entropy_size < bound*SAFETY_MARGIN)
 		{
 			entropy += random_bit() * entropy_size;
 			entropy_size *= 2;
